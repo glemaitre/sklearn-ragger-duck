@@ -7,20 +7,15 @@ import sys
 from importlib import import_module
 from pathlib import Path
 
-import joblib
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from llama_cpp import Llama
-from sentence_transformers import CrossEncoder
 
 sys.path.append(str(Path(__file__).parent.parent))
 import resources as res
 from schemas import WSMessage
-
-from ragger_duck.prompt import BasicPromptingStrategy
-from ragger_duck.retrieval import RetrieverReranker
 
 DEFAULT_PORT = 8123
 
@@ -44,29 +39,7 @@ async def send(ws, msg: str, type: str):
 
 @app.on_event("startup")
 async def startup_event():
-    global agent
-
-    api_semantic_retriever = joblib.load(conf.API_SEMANTIC_RETRIEVER_PATH)
-    api_lexical_retriever = joblib.load(conf.API_LEXICAL_RETRIEVER_PATH)
-    user_guide_semantic_retriever = joblib.load(conf.API_SEMANTIC_RETRIEVER_PATH)
-    user_guide_lexical_retriever = joblib.load(conf.API_LEXICAL_RETRIEVER_PATH)
-    cross_encoder = CrossEncoder(model_name=conf.CROSS_ENCODER_PATH, device=conf.DEVICE)
-    retriever = RetrieverReranker(
-        retrievers=[
-            api_semantic_retriever.set_params(top_k=conf.API_SEMANTIC_TOP_K),
-            api_lexical_retriever.set_params(top_k=conf.API_LEXICAL_TOP_K),
-            user_guide_semantic_retriever.set_params(
-                top_k=conf.USER_GUIDE_SEMANTIC_TOP_K
-            ),
-            user_guide_lexical_retriever.set_params(
-                top_k=conf.USER_GUIDE_LEXICAL_TOP_K
-            ),
-        ],
-        cross_encoder=cross_encoder,
-        threshold=conf.CROSS_ENCODER_THRESHOLD,
-        min_top_k=conf.CROSS_ENCODER_MIN_TOP_K,
-        max_top_k=conf.CROSS_ENCODER_MAX_TOP_K,
-    )
+    global llm
 
     llm = Llama(
         model_path=conf.LLM_PATH,
@@ -75,7 +48,6 @@ async def startup_event():
         n_threads=conf.N_THREADS,
         n_ctx=conf.CONTEXT_TOKENS,
     )
-    agent = BasicPromptingStrategy(llm=llm, retriever=retriever)
     logging.info("Server started")
 
 
@@ -118,7 +90,7 @@ async def websocket_endpoint(websocket: WebSocket):
             start_type = "start"
 
             await send(websocket, "Analyzing prompt...", "info")
-            stream, sources = agent(
+            stream = llm(
                 prompt,
                 echo=False,
                 stream=True,
@@ -130,8 +102,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 answer_type = start_type if response_complete == "" else "stream"
                 response_complete += response_text
                 await send(websocket, response_text, answer_type)
-            contextual_sources = "\n".join([f"<{src}>" for src in sources])
-            response_complete += "\n\nContextual source(s):\n" + contextual_sources
             await send(websocket, response_complete, start_type)
 
             await send(websocket, "", "end")
