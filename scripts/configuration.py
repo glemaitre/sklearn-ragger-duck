@@ -1,14 +1,14 @@
 # Device on which the semantic retriever is trained
-DEVICE = "mps"  # {"cpu", "cuda", "mps"}
+DEVICE = "cuda"  # {"cpu", "cuda", "mps"}
 
 # Path to the HTML API documentation
 API_DOC_PATH = (
-    "/Users/glemaitre/Documents/packages/scikit-learn/doc/_build/html/stable/"
+    "/scratch/glemaitr/packages/scikit-learn/doc/_build/html/stable/"
     "modules/generated"
 )
 # Path to the HTML User Guide documentation
 USER_GUIDE_DOC_PATH = (
-    "/Users/glemaitre/Documents/packages/scikit-learn/doc/_build/html/stable/modules"
+    "/scratch/glemaitr/packages/scikit-learn/doc/_build/html/stable/modules"
 )
 
 # Path to cache the embedding and models
